@@ -26,6 +26,5 @@ public class OtpVerificationRequest {
     }
 
     @NotBlank
-    @Size(min = 4, max = 6)
     private String otp;
 }

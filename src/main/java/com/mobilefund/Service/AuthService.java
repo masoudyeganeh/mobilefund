@@ -72,7 +72,9 @@ public class AuthService {
                     otp,
                     expiryTime,
                     "LOGIN",
-                    null
+                    null,
+                    user.getNationalCode(),
+                    user.getUsername()
             ));
 
             // Send OTP via SMS
@@ -87,7 +89,7 @@ public class AuthService {
     }
 
     public ResponseEntity<?> verifyLoginOtp(OtpVerificationRequest otpRequest) {
-        Optional<OtpCache> otpCache = otpCacheRepository.findById(Integer.valueOf(otpRequest.getPhoneNumber()));
+        Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
 
         if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("LOGIN")) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP request"));
@@ -118,7 +120,7 @@ public class AuthService {
         return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
     }
 
-    public ResponseEntity<?> registerUser(RegisterRequest registerRequest) {
+    public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {
         if (userRepository.existsByUsername(registerRequest.getUsername())) {
             return ResponseEntity
                     .badRequest()
@@ -137,11 +139,13 @@ public class AuthService {
                     .body(new ApiResponse(false, "National code is already registered!"));
         }
 
-        // Validate with external service
-        boolean isValid = validationService.validateUser(
-                registerRequest.getNationalCode(),
-                registerRequest.getPhoneNumber()
-        );
+//        // Validate with external service
+//        boolean isValid = validationService.validateUser(
+//                registerRequest.getNationalCode(),
+//                registerRequest.getPhoneNumber()
+//        );
+
+        boolean isValid = true;
 
         if (!isValid) {
             return ResponseEntity
@@ -159,7 +163,9 @@ public class AuthService {
                 otp,
                 expiryTime,
                 "REGISTER",
-                passwordEncoder.encode(registerRequest.getPassword())
+                passwordEncoder.encode(registerRequest.getPassword()),
+                registerRequest.getNationalCode(),
+                registerRequest.getUsername()
         ));
 
         // Send OTP via SMS
@@ -169,7 +175,7 @@ public class AuthService {
     }
 
     public ResponseEntity<?> verifyRegistrationOtp(OtpVerificationRequest otpRequest) {
-        Optional<OtpCache> otpCache = otpCacheRepository.findById(Integer.valueOf(otpRequest.getPhoneNumber()));
+        Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
 
         if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("REGISTER")) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP request"));
@@ -184,17 +190,17 @@ public class AuthService {
         }
 
         // Retrieve registration data from temporary storage
-        String[] storedData = otpCache.get().getTempData().split(";;");
-        if (storedData.length != 4) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid registration data"));
-        }
+//        String[] storedData = otpCache.get().getTempData().split(";;");
+//        if (storedData.length != 4) {
+//            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid registration data"));
+//        }
 
         // Reconstruct RegisterRequest
         RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setNationalCode(storedData[0]);
-        registerRequest.setUsername(storedData[1]);
-        registerRequest.setPassword(storedData[2]); // This is already encoded
-        registerRequest.setPhoneNumber(storedData[3]);
+        registerRequest.setNationalCode(otpCache.get().getNationalCode());
+        registerRequest.setUsername(otpCache.get().getUsername());
+        registerRequest.setPassword(otpCache.get().getTempData()); // This is already encoded
+        registerRequest.setPhoneNumber(otpRequest.getPhoneNumber());
 
         // Create user
         User user = new User(
@@ -244,7 +250,9 @@ public class AuthService {
                 otp,
                 expiryTime,
                 "RESET_PASSWORD",
-                null
+                null,
+                user.getNationalCode(),
+                user.getUsername()
         ));
 
         // Send OTP via SMS
