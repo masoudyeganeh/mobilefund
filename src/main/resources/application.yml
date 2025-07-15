@@ -1,0 +1,28 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:oracle:thin:@//avdf01.rh:2019/rayannav21c.rh
+    driverClassName: oracle.jdbc.OracleDriver
+    username: N21AATF01
+    password: n
+
+  jpa:
+    database-platform: org.hibernate.dialect.OracleDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+app:
+  jwtSecret: JWTSuperSecretKey
+  jwtExpirationInMs: 86400000 # 24 hours
+
+external:
+  validation:
+    url: http://external-validation-service/api/validate
+
+sms:
+  provider:
+    url: http://sms-gateway/api/send
+    apiKey: your-sms-api-key
