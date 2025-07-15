@@ -68,15 +68,12 @@ public class User {
     private String nationalCode;
 
     @NotBlank
-    @Size(min = 3, max = 20)
     private String username;
 
     @NotBlank
-    @Size(max = 120)
     private String password;
 
     @NotBlank
-    @Size(max = 15)
     private String phoneNumber;
 
     @ManyToMany(fetch = FetchType.LAZY)

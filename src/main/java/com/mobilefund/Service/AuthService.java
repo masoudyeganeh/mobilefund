@@ -118,7 +118,7 @@ public class AuthService {
         return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
     }
 
-    public ResponseEntity<?> registerUser(RegisterRequest registerRequest) {
+    public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {
         if (userRepository.existsByUsername(registerRequest.getUsername())) {
             return ResponseEntity
                     .badRequest()
@@ -137,11 +137,13 @@ public class AuthService {
                     .body(new ApiResponse(false, "National code is already registered!"));
         }
 
-        // Validate with external service
-        boolean isValid = validationService.validateUser(
-                registerRequest.getNationalCode(),
-                registerRequest.getPhoneNumber()
-        );
+//        // Validate with external service
+//        boolean isValid = validationService.validateUser(
+//                registerRequest.getNationalCode(),
+//                registerRequest.getPhoneNumber()
+//        );
+
+        boolean isValid = true;
 
         if (!isValid) {
             return ResponseEntity
@@ -169,7 +171,7 @@ public class AuthService {
     }
 
     public ResponseEntity<?> verifyRegistrationOtp(OtpVerificationRequest otpRequest) {
-        Optional<OtpCache> otpCache = otpCacheRepository.findById(Integer.valueOf(otpRequest.getPhoneNumber()));
+        Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
 
         if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("REGISTER")) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP request"));

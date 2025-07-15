@@ -10,7 +10,6 @@ public class RegisterRequest {
     private String nationalCode;
 
     @NotBlank
-    @Size(min = 3, max = 20)
     private String username;
 
     public String getNationalCode() {
@@ -46,10 +45,8 @@ public class RegisterRequest {
     }
 
     @NotBlank
-    @Size(min = 6, max = 40)
     private String password;
 
     @NotBlank
-    @Size(max = 15)
     private String phoneNumber;
 }

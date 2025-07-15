@@ -7,10 +7,13 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@NoArgsConstructor
 public class OtpCache {
     @Id
     private String phoneNumber;
+
+    public OtpCache() {
+
+    }
 
     public String getPhoneNumber() {
         return phoneNumber;

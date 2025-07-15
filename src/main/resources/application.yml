@@ -3,10 +3,10 @@ server:
 
 spring:
   datasource:
-    url: jdbc:oracle:thin:@//avdf01.rh:2019/rayannav21c.rh
+    url: jdbc:oracle:thin:@//localhost:1521/xepdb1
     driverClassName: oracle.jdbc.OracleDriver
-    username: N21AATF01
-    password: n
+    username: masoud
+    password: 1234
 
   jpa:
     database-platform: org.hibernate.dialect.OracleDialect

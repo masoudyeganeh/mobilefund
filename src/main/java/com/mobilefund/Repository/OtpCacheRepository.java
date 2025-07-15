@@ -8,4 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface OtpCacheRepository extends JpaRepository<OtpCache, Integer> {
+    Optional<OtpCache> findByPhoneNumber(String phoneNumber);
 }
