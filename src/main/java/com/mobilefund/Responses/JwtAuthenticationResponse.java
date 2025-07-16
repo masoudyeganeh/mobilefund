@@ -2,6 +2,7 @@ package com.mobilefund.Responses;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 public class JwtAuthenticationResponse {
     private String accessToken;
@@ -13,6 +14,9 @@ public class JwtAuthenticationResponse {
 
     // Default constructor (if needed for frameworks)
     public JwtAuthenticationResponse() {
+    }
+
+    public JwtAuthenticationResponse(UsernamePasswordAuthenticationToken auth) {
     }
 
     public String getAccessToken() {

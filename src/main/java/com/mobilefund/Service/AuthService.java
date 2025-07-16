@@ -1,10 +1,7 @@
 package com.mobilefund.Service;
 
 import com.mobilefund.Dto.*;
-import com.mobilefund.Model.ERole;
-import com.mobilefund.Model.OtpCache;
-import com.mobilefund.Model.Role;
-import com.mobilefund.Model.User;
+import com.mobilefund.Model.*;
 import com.mobilefund.Repository.OtpCacheRepository;
 import com.mobilefund.Repository.RoleRepository;
 import com.mobilefund.Repository.UserRepository;
@@ -50,17 +47,23 @@ public class AuthService {
     private final ExternalValidationService validationService;
     private final OtpCacheRepository otpCacheRepository;
 
-    public ResponseEntity<?> authenticateUser(LoginRequest loginRequest) {
+    public ResponseEntity<ApiResponse> authenticateUser(LoginRequest loginRequest) {
         try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            loginRequest.getUsername(),
-                            loginRequest.getPassword()
-                    )
-            );
+//            Authentication authentication = authenticationManager.authenticate(
+//                    new UsernamePasswordAuthenticationToken(
+//                            loginRequest.getUsername(),
+//                            loginRequest.getPassword()
+//                    )
+//            );
 
             User user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
+
+//            UserPrincipal userPrincipal = UserPrincipal.create(user);
+//
+//            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userPrincipal, authentication.getCredentials(), authentication.getAuthorities());
+//
+//            String jwt = tokenProvider.generateToken(auth);
 
             // Generate OTP
             String otp = generateOtp();
@@ -80,7 +83,7 @@ public class AuthService {
             // Send OTP via SMS
             smsService.sendSms(user.getPhoneNumber(), "Your verification code is: " + otp);
 
-            return ResponseEntity.ok(new ApiResponse(true, "OTP sent to your phone"));
+            return ResponseEntity.ok(new ApiResponse(true ,"otp is sent"));
         } catch (AuthenticationException e) {
             return ResponseEntity
                     .status(HttpStatus.UNAUTHORIZED)
@@ -88,7 +91,7 @@ public class AuthService {
         }
     }
 
-    public ResponseEntity<?> verifyLoginOtp(OtpVerificationRequest otpRequest) {
+    public ResponseEntity<ApiResponse> verifyLoginOtp(OtpVerificationRequest otpRequest) {
         Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
 
         if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("LOGIN")) {
@@ -107,17 +110,23 @@ public class AuthService {
         User user = userRepository.findByPhoneNumber(otpRequest.getPhoneNumber())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                user.getUsername(),
-                null
-        );
+                    Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            user.getUsername(),
+                            user.getPassword()
+                    )
+            );
 
-        String jwt = tokenProvider.generateToken(authentication);
+            UserPrincipal userPrincipal = UserPrincipal.create(user);
+
+            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userPrincipal, authentication.getCredentials(), authentication.getAuthorities());
+
+            String jwt = tokenProvider.generateToken(auth);
 
         // Clean up OTP cache
         otpCacheRepository.delete(otpCache.get());
 
-        return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
+        return ResponseEntity.ok(new ApiResponse(true ,jwt));
     }
 
     public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {
