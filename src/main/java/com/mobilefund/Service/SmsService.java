@@ -31,10 +31,9 @@ public class SmsService {
             request.put("message", message);
             request.put("api_key", apiKey);
 
-            // Send SMS
-//            restTemplate.postForEntity(smsProviderUrl, request, String.class);
+            System.out.println(message);
+
         } catch (Exception e) {
-            // Log error
         }
     }
 }

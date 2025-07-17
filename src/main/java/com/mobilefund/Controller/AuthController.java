@@ -2,8 +2,9 @@ package com.mobilefund.Controller;
 
 import com.mobilefund.Dto.*;
 import com.mobilefund.Responses.ApiResponse;
+import com.mobilefund.Responses.FirstFactorResponse;
+import com.mobilefund.Responses.JwtAuthenticationResponse;
 import com.mobilefund.Service.AuthService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,13 +21,15 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<FirstFactorResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         return authService.authenticateUser(loginRequest);
     }
 
     @PostMapping("/login/verify")
-    public ResponseEntity<ApiResponse> verifyLoginOtp(@Valid @RequestBody OtpVerificationRequest otpRequest) {
-        return authService.verifyLoginOtp(otpRequest);
+    public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(@Valid @RequestBody OtpVerificationRequest otpRequest,
+                                                                    @RequestHeader("X-AUTH-TOKEN") String authToken
+    ) {
+        return authService.verifyLoginOtp(otpRequest, authToken);
     }
 
     @PostMapping("/register")

@@ -6,15 +6,21 @@ import com.mobilefund.Repository.OtpCacheRepository;
 import com.mobilefund.Repository.RoleRepository;
 import com.mobilefund.Repository.UserRepository;
 import com.mobilefund.Responses.ApiResponse;
+import com.mobilefund.Responses.FirstFactorResponse;
 import com.mobilefund.Responses.JwtAuthenticationResponse;
+import com.mobilefund.config.AuthCache;
+import com.mobilefund.config.CustomUserDetailsService;
 import com.mobilefund.config.JwtTokenProvider;
+import com.mobilefund.config.TwoFactorContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -30,16 +36,21 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthCache authCache;
+    private final CustomUserDetailsService customUserDetailsService;
 
-    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
+    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, AuthCache authCache, CustomUserDetailsService customUserDetailsService, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.authCache = authCache;
+        this.customUserDetailsService = customUserDetailsService;
         this.tokenProvider = tokenProvider;
         this.smsService = smsService;
         this.validationService = validationService;
         this.otpCacheRepository = otpCacheRepository;
+
     }
 
     private final JwtTokenProvider tokenProvider;
@@ -47,86 +58,51 @@ public class AuthService {
     private final ExternalValidationService validationService;
     private final OtpCacheRepository otpCacheRepository;
 
-    public ResponseEntity<ApiResponse> authenticateUser(LoginRequest loginRequest) {
-        try {
-//            Authentication authentication = authenticationManager.authenticate(
-//                    new UsernamePasswordAuthenticationToken(
-//                            loginRequest.getUsername(),
-//                            loginRequest.getPassword()
-//                    )
-//            );
+    public ResponseEntity<FirstFactorResponse> authenticateUser(LoginRequest loginRequest) {
 
             User user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-//            UserPrincipal userPrincipal = UserPrincipal.create(user);
-//
-//            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userPrincipal, authentication.getCredentials(), authentication.getAuthorities());
-//
-//            String jwt = tokenProvider.generateToken(auth);
+            if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+                throw new BadCredentialsException("Invalid credentials");
+            }
 
-            // Generate OTP
-            String otp = generateOtp();
-            LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(5);
-
-            // Save OTP to cache
-            otpCacheRepository.save(new OtpCache(
-                    user.getPhoneNumber(),
-                    otp,
-                    expiryTime,
-                    "LOGIN",
-                    null,
-                    user.getNationalCode(),
-                    user.getUsername()
-            ));
-
-            // Send OTP via SMS
-            smsService.sendSms(user.getPhoneNumber(), "Your verification code is: " + otp);
-
-            return ResponseEntity.ok(new ApiResponse(true ,"otp is sent"));
-        } catch (AuthenticationException e) {
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse(false, "Invalid username or password"));
-        }
-    }
-
-    public ResponseEntity<ApiResponse> verifyLoginOtp(OtpVerificationRequest otpRequest) {
-        Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
-
-        if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("LOGIN")) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP request"));
-        }
-
-        if (LocalDateTime.now().isAfter(otpCache.get().getExpiryTime())) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "OTP expired"));
-        }
-
-        if (!otpCache.get().getOtp().equals(otpRequest.getOtp())) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP"));
-        }
-
-        // OTP is valid, proceed with login
-        User user = userRepository.findByPhoneNumber(otpRequest.getPhoneNumber())
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-                    Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            user.getUsername(),
-                            user.getPassword()
-                    )
+            TwoFactorContext context = new TwoFactorContext(
+                    loginRequest.getUsername(),
+                    user.getPassword()
             );
 
-            UserPrincipal userPrincipal = UserPrincipal.create(user);
+            authCache.store(context);
+            smsService.sendSms(user.getPhoneNumber(), "Your OTP: " + context.getOtp());
 
-            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userPrincipal, authentication.getCredentials(), authentication.getAuthorities());
+        return ResponseEntity.ok(
+                new FirstFactorResponse(true, "OTP sent", context.getAuthToken())
+        );
+    }
 
-            String jwt = tokenProvider.generateToken(auth);
+    public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(OtpVerificationRequest otpRequest, String authToken) {
 
-        // Clean up OTP cache
-        otpCacheRepository.delete(otpCache.get());
+        TwoFactorContext context = authCache.findByOtp(otpRequest.getOtp())
+                .orElseThrow(() -> new SecurityException("Invalid OTP"));
 
-        return ResponseEntity.ok(new ApiResponse(true ,jwt));
+        if (!context.validate(authToken, otpRequest.getOtp())) {
+            throw new SecurityException("Authentication failed");
+        }
+
+        UserPrincipal principal = (UserPrincipal) customUserDetailsService.loadUserByUsername(
+                context.getUsername()
+        );
+
+        String jwt = tokenProvider.generateToken(
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        principal.getAuthorities()
+                )
+        );
+
+        authCache.invalidate(context.getUsername());
+        return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
     }
 
     public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {
@@ -147,12 +123,6 @@ public class AuthService {
                     .badRequest()
                     .body(new ApiResponse(false, "National code is already registered!"));
         }
-
-//        // Validate with external service
-//        boolean isValid = validationService.validateUser(
-//                registerRequest.getNationalCode(),
-//                registerRequest.getPhoneNumber()
-//        );
 
         boolean isValid = true;
 
@@ -198,13 +168,6 @@ public class AuthService {
             return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP"));
         }
 
-        // Retrieve registration data from temporary storage
-//        String[] storedData = otpCache.get().getTempData().split(";;");
-//        if (storedData.length != 4) {
-//            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid registration data"));
-//        }
-
-        // Reconstruct RegisterRequest
         RegisterRequest registerRequest = new RegisterRequest();
         registerRequest.setNationalCode(otpCache.get().getNationalCode());
         registerRequest.setUsername(otpCache.get().getUsername());

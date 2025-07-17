@@ -3,10 +3,13 @@ server:
 
 spring:
   datasource:
-    url: jdbc:oracle:thin:@//localhost:1521/xepdb1
+#    url: jdbc:oracle:thin:@//localhost:1521/xepdb1
+    url: jdbc:oracle:thin:@//avdf01.rh:2019/rayannav21c.rh
     driverClassName: oracle.jdbc.OracleDriver
-    username: masoud
-    password: 1234
+    username: N21AATF01
+    password: n
+#    username: masoud
+#    password: 1234
 
   jpa:
     database-platform: org.hibernate.dialect.OracleDialect
@@ -15,8 +18,9 @@ spring:
     show-sql: true
 
 app:
-  jwtSecret: JWTSuperSecretKey
+  jwtSecret: xDnbM0I6G6hnT9uaFBIX8pKdhPkyA4JRlG7nqPQ4GM0=
   jwtExpirationInMs: 86400000 # 24 hours
+  authSecret: de2B5QnArtdSuVaEpSXTDT84YsEqSdoHPz3ewk7MWMU=
 
 external:
   validation:

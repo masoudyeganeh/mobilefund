@@ -1,7 +1,5 @@
 package com.mobilefund.Dto;
 
-import lombok.Data;
-
 import javax.validation.constraints.NotBlank;
 
 public class LoginRequest {
