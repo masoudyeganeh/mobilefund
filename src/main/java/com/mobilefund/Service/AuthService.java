@@ -1,7 +1,11 @@
 package com.mobilefund.Service;
 
 import com.mobilefund.Dto.*;
+import com.mobilefund.Exception.ExpiredAuthTokenException;
+import com.mobilefund.Exception.InvalidAuthTokenException;
+import com.mobilefund.Exception.InvalidOtpException;
 import com.mobilefund.Model.*;
+import com.mobilefund.Redis.Config.Repository.TwoFactorRepository;
 import com.mobilefund.Repository.OtpCacheRepository;
 import com.mobilefund.Repository.RoleRepository;
 import com.mobilefund.Repository.UserRepository;
@@ -24,6 +28,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
@@ -38,14 +43,16 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthCache authCache;
     private final CustomUserDetailsService customUserDetailsService;
+    private final TwoFactorRepository twoFactorRepository;
 
-    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, AuthCache authCache, CustomUserDetailsService customUserDetailsService, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
+    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, AuthCache authCache, CustomUserDetailsService customUserDetailsService, TwoFactorRepository twoFactorRepository, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.authCache = authCache;
         this.customUserDetailsService = customUserDetailsService;
+        this.twoFactorRepository = twoFactorRepository;
         this.tokenProvider = tokenProvider;
         this.smsService = smsService;
         this.validationService = validationService;
@@ -69,10 +76,11 @@ public class AuthService {
 
             TwoFactorContext context = new TwoFactorContext(
                     loginRequest.getUsername(),
-                    user.getPassword()
+                    user.getPassword(),
+                    user.getPhoneNumber()
             );
 
-            authCache.store(context);
+            twoFactorRepository.save(context, Duration.ofMinutes(10));
             smsService.sendSms(user.getPhoneNumber(), "Your OTP: " + context.getOtp());
 
         return ResponseEntity.ok(
@@ -82,12 +90,19 @@ public class AuthService {
 
     public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(OtpVerificationRequest otpRequest, String authToken) {
 
-        TwoFactorContext context = authCache.findByOtp(otpRequest.getOtp())
-                .orElseThrow(() -> new SecurityException("Invalid OTP"));
+        TwoFactorContext context = twoFactorRepository.findByAuthToken(authToken)
+                .orElseThrow(() -> new InvalidAuthTokenException("Invalid authentication token"));
 
-        if (!context.validate(authToken, otpRequest.getOtp())) {
-            throw new SecurityException("Authentication failed");
+        if (context.isExpired()) {
+            twoFactorRepository.delete(authToken);
+            throw new ExpiredAuthTokenException("Authentication token expired");
         }
+
+        if (!context.getOtp().equals(otpRequest.getOtp())) {
+            throw new InvalidOtpException("Invalid OTP code");
+        }
+
+        twoFactorRepository.delete(authToken);
 
         UserPrincipal principal = (UserPrincipal) customUserDetailsService.loadUserByUsername(
                 context.getUsername()
@@ -101,7 +116,6 @@ public class AuthService {
                 )
         );
 
-        authCache.invalidate(context.getUsername());
         return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
     }
 

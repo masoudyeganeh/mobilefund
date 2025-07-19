@@ -1,25 +1,51 @@
 package com.mobilefund.config;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.Serializable;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Base64;
 
-public class TwoFactorContext {
-    private final String username;
-    private final String authToken;
-    private final String otp;
-    private final LocalDateTime expiryTime;
+@JsonSerialize
+@JsonDeserialize
+@AllArgsConstructor
+@NoArgsConstructor
+public class TwoFactorContext implements Serializable {
+    private String username;
+    private String authToken;
+    private String otp;
+    private String phoneNumber;
+    private LocalDateTime expiryTime;
     private static final String HMAC_ALGO = "HmacSHA256";
     private static final byte[] SERVER_SECRET = "YOUR_SECRET_KEY".getBytes();
 
-    public TwoFactorContext(String username, String passwordHash) {
+    @JsonIgnore
+    public boolean isExpired() {
+        return expiryTime.plusMinutes(5).isBefore(LocalDateTime.now());
+    }
+
+    public TwoFactorContext(String username, String passwordHash, String phoneNumber) {
         this.username = username;
         this.authToken = generateAuthToken(username, passwordHash);
         this.otp = generateRandomOtp();
-        this.expiryTime = LocalDateTime.now().plusMinutes(5);
+        this.phoneNumber = phoneNumber;
+        this.expiryTime = LocalDateTime.now().plusMinutes(10);
+    }
+
+    public TwoFactorContext(LocalDateTime expiryTime, String phoneNumber, String otp, String authToken, String username) {
+        this.expiryTime = expiryTime;
+        this.phoneNumber = phoneNumber;
+        this.otp = otp;
+        this.authToken = authToken;
+        this.username = username;
     }
 
     private String generateAuthToken(String username, String passwordHash) {
