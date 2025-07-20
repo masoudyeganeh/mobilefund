@@ -1,6 +1,7 @@
 package com.mobilefund.Dto;
 
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 
 public class OtpVerificationRequest {
     @NotBlank
@@ -22,6 +23,6 @@ public class OtpVerificationRequest {
         this.phoneNumber = phoneNumber;
     }
 
-    @NotBlank
+    @NotNull @NotBlank
     private String otp;
 }

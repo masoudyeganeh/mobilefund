@@ -11,6 +11,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -32,7 +33,7 @@ public class AuthController {
 
     @PostMapping("/login/verify")
     public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(@Valid @RequestBody OtpVerificationRequest otpRequest,
-                                                                    @RequestHeader("X-AUTH-TOKEN") String authToken
+                                                                    @NotNull @RequestHeader("X-AUTH-TOKEN") String authToken
     ) {
         return authService.verifyLoginOtp(otpRequest, authToken);
     }

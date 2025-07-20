@@ -81,6 +81,10 @@ public class AuthService {
 
     public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(OtpVerificationRequest otpRequest, String authToken) {
 
+        if(otpRequest == null) {
+            throw new OtpCodeIsNotSent("otp code is not sent");
+        }
+
         TwoFactorContext context = twoFactorRepository.findByAuthToken(authToken)
                 .orElseThrow(() -> new InvalidAuthTokenException("Invalid authentication token"));
 
