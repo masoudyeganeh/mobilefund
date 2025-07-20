@@ -1,8 +1,6 @@
 package com.mobilefund.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
@@ -14,16 +12,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Base64;
 
-@JsonSerialize
-@JsonDeserialize
-@AllArgsConstructor
-@NoArgsConstructor
 public class TwoFactorContext implements Serializable {
     private String username;
     private String authToken;
     private String otp;
     private String phoneNumber;
-    private LocalDateTime expiryTime;
+    private LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(10);
     private static final String HMAC_ALGO = "HmacSHA256";
     private static final byte[] SERVER_SECRET = "YOUR_SECRET_KEY".getBytes();
 
@@ -32,21 +26,15 @@ public class TwoFactorContext implements Serializable {
         return expiryTime.plusMinutes(5).isBefore(LocalDateTime.now());
     }
 
-    public TwoFactorContext(String username, String passwordHash, String phoneNumber) {
+    public TwoFactorContext(String username, String passwordHash, String phoneNumber, LocalDateTime expiryTime) {
         this.username = username;
         this.authToken = generateAuthToken(username, passwordHash);
         this.otp = generateRandomOtp();
         this.phoneNumber = phoneNumber;
-        this.expiryTime = LocalDateTime.now().plusMinutes(10);
+        this.expiryTime = expiryTime;
     }
 
-    public TwoFactorContext(LocalDateTime expiryTime, String phoneNumber, String otp, String authToken, String username) {
-        this.expiryTime = expiryTime;
-        this.phoneNumber = phoneNumber;
-        this.otp = otp;
-        this.authToken = authToken;
-        this.username = username;
-    }
+    public TwoFactorContext() {}
 
     private String generateAuthToken(String username, String passwordHash) {
         try {

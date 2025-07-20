@@ -1,25 +1,65 @@
 package com.mobilefund.Exception;
 
 import com.mobilefund.Responses.ApiResponse;
+import lombok.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(value = {CustomException.class})
-    public ResponseEntity<ApiResponse> handleCustomException(CustomException ex) {
+    @ExceptionHandler(CustomAuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthException(CustomAuthenticationException ex) {
         return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(false, ex.getMessage()));
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(ex.getMessage()));
     }
 
-    @ExceptionHandler(value = {Exception.class})
-    public ResponseEntity<ApiResponse> handleException(Exception ex) {
+    @ExceptionHandler(InvalidCredentials.class)
+    public ResponseEntity<ErrorResponse> handleAuthException(InvalidCredentials ex) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(ex.getMessage()));
+    }
+
+    // Add other exception handlers as needed
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(false, "An error occurred"));
+                .body(new ErrorResponse("Internal server error"));
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(UserNotFoundException ex) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(BadCredentialsException ex) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(ex.getMessage()));
+    }
+
+    public static class ErrorResponse {
+        private String message;
+
+        public ErrorResponse(String message) {
+            this.message = message;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {}
+
     }
 }

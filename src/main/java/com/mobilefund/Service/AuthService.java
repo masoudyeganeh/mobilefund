@@ -1,9 +1,7 @@
 package com.mobilefund.Service;
 
 import com.mobilefund.Dto.*;
-import com.mobilefund.Exception.ExpiredAuthTokenException;
-import com.mobilefund.Exception.InvalidAuthTokenException;
-import com.mobilefund.Exception.InvalidOtpException;
+import com.mobilefund.Exception.*;
 import com.mobilefund.Model.*;
 import com.mobilefund.Redis.Config.Repository.TwoFactorRepository;
 import com.mobilefund.Repository.OtpCacheRepository;
@@ -25,6 +23,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -68,7 +67,7 @@ public class AuthService {
     public ResponseEntity<FirstFactorResponse> authenticateUser(LoginRequest loginRequest) {
 
             User user = userRepository.findByUsername(loginRequest.getUsername())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new UserNotFoundException("User not found"));
 
             if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
                 throw new BadCredentialsException("Invalid credentials");
@@ -77,7 +76,8 @@ public class AuthService {
             TwoFactorContext context = new TwoFactorContext(
                     loginRequest.getUsername(),
                     user.getPassword(),
-                    user.getPhoneNumber()
+                    user.getPhoneNumber(),
+                    LocalDateTime.now().plusMinutes(10)
             );
 
             twoFactorRepository.save(context, Duration.ofMinutes(10));

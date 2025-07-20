@@ -7,11 +7,13 @@ import com.mobilefund.Responses.JwtAuthenticationResponse;
 import com.mobilefund.Service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 
 @RestController
+//@RestControllerAdvice
 @RequestMapping("/api/auth")
 public class AuthController {
     private final AuthService authService;
@@ -22,7 +24,11 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<FirstFactorResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        return authService.authenticateUser(loginRequest);
+        try {
+            return authService.authenticateUser(loginRequest);
+        } catch (AuthenticationException e) {
+        throw e;
+        }
     }
 
     @PostMapping("/login/verify")
