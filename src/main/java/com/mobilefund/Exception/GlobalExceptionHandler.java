@@ -41,6 +41,13 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(InvalidAuthTokenException.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(InvalidAuthTokenException ex) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(ex.getMessage()));
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleGenericException(BadCredentialsException ex) {
         return ResponseEntity

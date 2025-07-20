@@ -10,8 +10,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -21,21 +19,13 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtTokenFilter jwtTokenFilter;
-    private final UserRepository userRepository;
 
     @Autowired
     public SecurityConfig(JwtAuthenticationEntryPoint unauthorizedHandler,
                           JwtTokenFilter jwtTokenFilter, UserRepository userRepository) {
         this.unauthorizedHandler = unauthorizedHandler;
         this.jwtTokenFilter = jwtTokenFilter;
-        this.userRepository = userRepository;
     }
-
-//    @Bean
-//    public JwtTokenFilter jwtTokenFilter(JwtTokenProvider tokenProvider,
-//                                         UserRepository userRepository) {
-//        return new JwtTokenFilter(tokenProvider, userRepository);
-//    }
 
     @Bean
     @Override

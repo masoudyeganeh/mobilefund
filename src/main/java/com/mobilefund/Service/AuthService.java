@@ -10,20 +10,13 @@ import com.mobilefund.Repository.UserRepository;
 import com.mobilefund.Responses.ApiResponse;
 import com.mobilefund.Responses.FirstFactorResponse;
 import com.mobilefund.Responses.JwtAuthenticationResponse;
-import com.mobilefund.config.AuthCache;
 import com.mobilefund.config.CustomUserDetailsService;
 import com.mobilefund.config.JwtTokenProvider;
 import com.mobilefund.config.TwoFactorContext;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -40,16 +33,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuthCache authCache;
     private final CustomUserDetailsService customUserDetailsService;
     private final TwoFactorRepository twoFactorRepository;
 
-    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, AuthCache authCache, CustomUserDetailsService customUserDetailsService, TwoFactorRepository twoFactorRepository, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
+    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, CustomUserDetailsService customUserDetailsService, TwoFactorRepository twoFactorRepository, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
-        this.authCache = authCache;
         this.customUserDetailsService = customUserDetailsService;
         this.twoFactorRepository = twoFactorRepository;
         this.tokenProvider = tokenProvider;
