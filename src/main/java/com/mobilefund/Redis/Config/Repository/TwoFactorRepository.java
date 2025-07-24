@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 @Component
@@ -17,20 +18,21 @@ public class TwoFactorRepository {
     }
 
     public void save(TwoFactorContext twoFactorContext, Duration ttl){
+        twoFactorContext.setExpiryTime(Instant.now().plus(ttl));
         redisTemplate.opsForValue().set(
-                KEY_PREFIX + twoFactorContext.getAuthToken(),
+                KEY_PREFIX + twoFactorContext.getPhoneNumber(),
                 twoFactorContext,
                 ttl
         );
     }
 
-    public Optional<TwoFactorContext> findByAuthToken(String authToken) {
+    public Optional<TwoFactorContext> findByPhoneNumber(String phoneNumber) {
         return Optional.ofNullable(
-                redisTemplate.opsForValue().get(KEY_PREFIX + authToken)
+                redisTemplate.opsForValue().get(KEY_PREFIX + phoneNumber)
         );
     }
 
-    public void delete(String authToken) {
-        redisTemplate.delete(KEY_PREFIX + authToken);
+    public void delete(String phoneNumber) {
+        redisTemplate.delete(KEY_PREFIX + phoneNumber);
     }
 }

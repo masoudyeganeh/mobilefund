@@ -4,17 +4,23 @@ import com.mobilefund.Dto.*;
 import com.mobilefund.Responses.ApiResponse;
 import com.mobilefund.Responses.FirstFactorResponse;
 import com.mobilefund.Responses.JwtAuthenticationResponse;
+import com.mobilefund.Responses.LoginResponse;
 import com.mobilefund.Service.AuthService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+import java.time.Duration;
+import java.util.Objects;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1")
 public class AuthController {
     private final AuthService authService;
 
@@ -23,19 +29,27 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<FirstFactorResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<LoginResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest, HttpServletResponse response) {
         try {
-            return authService.authenticateUser(loginRequest);
+            LoginResponse loginResponse = authService.authenticateUser(loginRequest);
+            if (!Objects.equals(loginResponse.getJwt(), "otp required")) {
+                ResponseCookie cookie = ResponseCookie.from("jwt", loginResponse.getJwt())
+                        .httpOnly(true)
+                        .secure(true)
+                        .path("/")
+                        .maxAge(Duration.ofDays(30))
+                        .sameSite("Strict")
+                        .domain("yourdomain.com")
+                        .build();
+                response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+                return ResponseEntity.ok(
+                        loginResponse);
+            }
+            return ResponseEntity.ok(
+                    loginResponse);
         } catch (AuthenticationException e) {
         throw e;
         }
-    }
-
-    @PostMapping("/login/verify")
-    public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(@Valid @RequestBody OtpVerificationRequest otpRequest,
-                                                                    @NotNull @RequestHeader("X-AUTH-TOKEN") String authToken
-    ) {
-        return authService.verifyLoginOtp(otpRequest, authToken);
     }
 
     @PostMapping("/register")

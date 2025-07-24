@@ -1,28 +1,46 @@
 package com.mobilefund.Model;
 
-import lombok.Data;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import javax.persistence.*;
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.Size;
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
 @Table(name = "users", uniqueConstraints = {
-        @UniqueConstraint(columnNames = "username"),
         @UniqueConstraint(columnNames = "phoneNumber"),
         @UniqueConstraint(columnNames = "nationalCode")
 })
-@NoArgsConstructor
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "user_seq")
     @SequenceGenerator(name = "user_seq", sequenceName = "user_seq", allocationSize = 1)
     private Long id;
+
+    @NotBlank
+    private String nationalCode;
+
+    @NotBlank
+    private String password;
+
+    @NotBlank
+    private String phoneNumber;
+
+    @NotBlank
+    private boolean twoFactorAuth;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id"))
+    private Set<Role> roles = new HashSet<>();
+
+    public User(String nationalCode, String password, String phoneNumber) {
+        this.nationalCode = nationalCode;
+        this.password = password;
+        this.phoneNumber = phoneNumber;
+    }
 
     public Long getId() {
         return id;
@@ -38,14 +56,6 @@ public class User {
 
     public void setNationalCode(String nationalCode) {
         this.nationalCode = nationalCode;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
     }
 
     public String getPassword() {
@@ -64,23 +74,13 @@ public class User {
         this.phoneNumber = phoneNumber;
     }
 
-    @NotBlank
-    private String nationalCode;
+    public boolean isTwoFactorAuth() {
+        return twoFactorAuth;
+    }
 
-    @NotBlank
-    private String username;
-
-    @NotBlank
-    private String password;
-
-    @NotBlank
-    private String phoneNumber;
-
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id"))
-    private Set<Role> roles = new HashSet<>();
+    public void setTwoFactorAuth(boolean twoFactorAuth) {
+        this.twoFactorAuth = twoFactorAuth;
+    }
 
     public Set<Role> getRoles() {
         return roles;
@@ -90,14 +90,5 @@ public class User {
         this.roles = roles;
     }
 
-    public User(String nationalCode, String username, String password, String phoneNumber) {
-        this.nationalCode = nationalCode;
-        this.username = username;
-        this.password = password;
-        this.phoneNumber = phoneNumber;
-    }
-
-    public User() {
-
-    }
+    public User() {}
 }

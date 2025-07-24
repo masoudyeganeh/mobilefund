@@ -6,6 +6,13 @@ public class LoginRequest {
     @NotBlank
     private String username;
 
+    @NotBlank
+    private String password;
+
+    private String otp;
+
+    private String captcha;
+
     public String getUsername() {
         return username;
     }
@@ -22,6 +29,19 @@ public class LoginRequest {
         this.password = password;
     }
 
-    @NotBlank
-    private String password;
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
+    }
+
+    public String getCaptcha() {
+        return captcha;
+    }
+
+    public void setCaptcha(String captcha) {
+        this.captcha = captcha;
+    }
 }

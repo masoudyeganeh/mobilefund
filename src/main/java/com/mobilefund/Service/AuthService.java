@@ -8,8 +8,8 @@ import com.mobilefund.Repository.OtpCacheRepository;
 import com.mobilefund.Repository.RoleRepository;
 import com.mobilefund.Repository.UserRepository;
 import com.mobilefund.Responses.ApiResponse;
-import com.mobilefund.Responses.FirstFactorResponse;
 import com.mobilefund.Responses.JwtAuthenticationResponse;
+import com.mobilefund.Responses.LoginResponse;
 import com.mobilefund.config.CustomUserDetailsService;
 import com.mobilefund.config.JwtTokenProvider;
 import com.mobilefund.config.TwoFactorContext;
@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
@@ -55,52 +56,56 @@ public class AuthService {
     private final ExternalValidationService validationService;
     private final OtpCacheRepository otpCacheRepository;
 
-    public ResponseEntity<FirstFactorResponse> authenticateUser(LoginRequest loginRequest) {
+    public User findUserByUsername(String username) throws UserNotFoundException {
+        Optional<User> user = userRepository.findByNationalCode(username);
+        if (user.isPresent()) {
+            return user.get();
+        }
 
-            User user = userRepository.findByUsername(loginRequest.getUsername())
-                    .orElseThrow(() -> new UserNotFoundException("User not found"));
+        user = Optional.ofNullable(userRepository.findByPhoneNumber(username));
+        if (user.isPresent()) {
+            return user.get();
+        }
 
-            if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-                throw new BadCredentialsException("Invalid credentials");
-            }
-
-            TwoFactorContext context = new TwoFactorContext(
-                    loginRequest.getUsername(),
-                    user.getPassword(),
-                    user.getPhoneNumber(),
-                    LocalDateTime.now().plusMinutes(10)
-            );
-
-            twoFactorRepository.save(context, Duration.ofMinutes(10));
-            smsService.sendSms(user.getPhoneNumber(), "Your OTP: " + context.getOtp());
-
-        return ResponseEntity.ok(
-                new FirstFactorResponse(true, "OTP sent", context.getAuthToken())
-        );
+        throw new UserNotFoundException("User not found");
     }
 
-    public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(OtpVerificationRequest otpRequest, String authToken) {
+    public LoginResponse authenticateUser(LoginRequest loginRequest) {
 
-        if(otpRequest == null) {
-            throw new OtpCodeIsNotSent("otp code is not sent");
+        User user = findUserByUsername(loginRequest.getUsername());
+
+        Optional<TwoFactorContext> context = twoFactorRepository.findByPhoneNumber(user.getPhoneNumber());
+
+        if (loginRequest.getOtp() == null && user.isTwoFactorAuth() && !context.isPresent()) {
+            TwoFactorContext contextGenerated = new TwoFactorContext(
+                    user.getNationalCode(),
+                    user.getPassword(),
+                    user.getPhoneNumber()
+            );
+            twoFactorRepository.save(contextGenerated, Duration.ofMinutes(10));
+            smsService.sendSms(user.getPhoneNumber(), "Your OTP: " + contextGenerated.getOtp());
+            return new LoginResponse()
+                    .setLoginStatus("otp required")
+                    .setRemainingTime("1000")
+                    .setRemainingAttempts("3");
         }
 
-        TwoFactorContext context = twoFactorRepository.findByAuthToken(authToken)
-                .orElseThrow(() -> new InvalidAuthTokenException("Invalid authentication token"));
-
-        if (context.isExpired()) {
-            twoFactorRepository.delete(authToken);
-            throw new ExpiredAuthTokenException("Authentication token expired");
+        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            throw new BadCredentialsException("Invalid credentials");
         }
 
-        if (!context.getOtp().equals(otpRequest.getOtp())) {
-            throw new InvalidOtpException("Invalid OTP code");
+        if (context.isPresent() && user.isTwoFactorAuth()) {
+            if (loginRequest.getOtp() == null || loginRequest.getOtp().isEmpty() || loginRequest.getOtp().isBlank()) {
+                throw new OtpCodeIsNotSent("otp code is not sent");
+            }
+        TwoFactorContext twoFactorContext = context.get();
+            if (!twoFactorContext.getOtp().equals(loginRequest.getOtp())) {
+                throw new InvalidOtpException("Invalid OTP code");
+            }
         }
-
-        twoFactorRepository.delete(authToken);
 
         UserPrincipal principal = (UserPrincipal) customUserDetailsService.loadUserByUsername(
-                context.getUsername()
+                user.getNationalCode()
         );
 
         String jwt = tokenProvider.generateToken(
@@ -111,11 +116,17 @@ public class AuthService {
                 )
         );
 
-        return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
+        return new LoginResponse()
+                .setLoginStatus("success")
+                .setNationalCode(user.getNationalCode())
+                .setMobileNumber(user.getPhoneNumber());
     }
 
+//    public ResponseEntity<JwtAuthenticationResponse> verifyLoginOtp(OtpVerificationRequest otpRequest, String authToken) {
+//    }
+
     public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {
-        if (userRepository.existsByUsername(registerRequest.getUsername())) {
+        if (userRepository.existsByNationalCode(registerRequest.getNationalCode()) || userRepository.existsByPhoneNumber(registerRequest.getPhoneNumber())) {
             return ResponseEntity
                     .badRequest()
                     .body(new ApiResponse(false, "Username is already taken!"));
@@ -186,7 +197,6 @@ public class AuthService {
         // Create user
         User user = new User(
                 registerRequest.getNationalCode(),
-                registerRequest.getUsername(),
                 registerRequest.getPassword(), // Already encoded password
                 registerRequest.getPhoneNumber()
         );
@@ -206,7 +216,7 @@ public class AuthService {
     }
 
     public ResponseEntity<?> forgotPassword(ForgotPasswordRequest forgotPasswordRequest) {
-        User user = userRepository.findByUsername(forgotPasswordRequest.getUsername())
+        User user = userRepository.findByNationalCode(forgotPasswordRequest.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Validate with external service
@@ -233,7 +243,7 @@ public class AuthService {
                 "RESET_PASSWORD",
                 null,
                 user.getNationalCode(),
-                user.getUsername()
+                user.getNationalCode()
         ));
 
         // Send OTP via SMS
@@ -258,8 +268,7 @@ public class AuthService {
         }
 
         // Update password
-        User user = userRepository.findByPhoneNumber(resetPasswordRequest.getPhoneNumber())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = new User();
 
         user.setPassword(passwordEncoder.encode(resetPasswordRequest.getNewPassword()));
         userRepository.save(user);
