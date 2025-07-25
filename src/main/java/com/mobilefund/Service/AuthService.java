@@ -10,9 +10,11 @@ import com.mobilefund.Repository.UserRepository;
 import com.mobilefund.Responses.ApiResponse;
 import com.mobilefund.Responses.JwtAuthenticationResponse;
 import com.mobilefund.Responses.LoginResponse;
+import com.mobilefund.Responses.OtpVerifyResponse;
 import com.mobilefund.config.CustomUserDetailsService;
 import com.mobilefund.config.JwtTokenProvider;
 import com.mobilefund.config.TwoFactorContext;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -36,6 +38,12 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final CustomUserDetailsService customUserDetailsService;
     private final TwoFactorRepository twoFactorRepository;
+
+    @Value("${sms.validity.minutes}")
+    private int otpValidityMinutes;
+
+    @Value("${sms.max.attempts}")
+    private int maxAttempts;
 
     public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, CustomUserDetailsService customUserDetailsService, TwoFactorRepository twoFactorRepository, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository) {
         this.authenticationManager = authenticationManager;
@@ -70,6 +78,39 @@ public class AuthService {
         throw new UserNotFoundException("User not found");
     }
 
+    public OtpVerifyResponse verifyOtp(TwoFactorContext context, String otp) {
+        if (context.isExpired()) {
+            twoFactorRepository.delete(context.getPhoneNumber());
+            throw new OtpCodeIsNotSent("OTP expired");
+        }
+
+        if (!context.getOtp().equals(otp)) {
+            context.setRemainingAttempts(context.getRemainingAttempts() - 1);
+            twoFactorRepository.save(context);
+
+            if (context.getRemainingAttempts() <= 0) {
+                twoFactorRepository.delete(context.getPhoneNumber());
+                throw new OtpCodeIsNotSent("Max attempts reached");
+            }
+
+            return new OtpVerifyResponse(
+                    false,
+                    context.getRemainingAttempts(),
+                    context.getRemainingTime().getSeconds()
+            );
+        }
+
+            // Successful verification
+            twoFactorRepository.delete(context.getPhoneNumber());
+//        String jwtToken = jwtTokenUtil.generateToken(phoneNumber);
+
+            return new OtpVerifyResponse(
+                    true,
+                    context.getRemainingAttempts(),
+                    context.getRemainingTime().getSeconds()
+            );
+    }
+
     public LoginResponse authenticateUser(LoginRequest loginRequest) {
 
         User user = findUserByUsername(loginRequest.getUsername());
@@ -79,15 +120,16 @@ public class AuthService {
         if (loginRequest.getOtp() == null && user.isTwoFactorAuth() && !context.isPresent()) {
             TwoFactorContext contextGenerated = new TwoFactorContext(
                     user.getNationalCode(),
-                    user.getPassword(),
-                    user.getPhoneNumber()
+                    user.getPhoneNumber(),
+                    Instant.now().plusSeconds(otpValidityMinutes * 60L),
+                    maxAttempts
             );
-            twoFactorRepository.save(contextGenerated, Duration.ofMinutes(10));
+            twoFactorRepository.save(contextGenerated);
             smsService.sendSms(user.getPhoneNumber(), "Your OTP: " + contextGenerated.getOtp());
             return new LoginResponse()
                     .setLoginStatus("otp required")
-                    .setRemainingTime("1000")
-                    .setRemainingAttempts("3");
+                    .setRemainingTime(String.valueOf(otpValidityMinutes))
+                    .setRemainingAttempts(String.valueOf(maxAttempts));
         }
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
@@ -98,9 +140,25 @@ public class AuthService {
             if (loginRequest.getOtp() == null || loginRequest.getOtp().isEmpty() || loginRequest.getOtp().isBlank()) {
                 throw new OtpCodeIsNotSent("otp code is not sent");
             }
-        TwoFactorContext twoFactorContext = context.get();
-            if (!twoFactorContext.getOtp().equals(loginRequest.getOtp())) {
-                throw new InvalidOtpException("Invalid OTP code");
+            TwoFactorContext twoFactorContext = context.get();
+            OtpVerifyResponse otpVerifyResponse = verifyOtp(twoFactorContext, loginRequest.getOtp());
+            if (otpVerifyResponse.success()) {
+                UserPrincipal principal = (UserPrincipal) customUserDetailsService.loadUserByUsername(
+                        user.getNationalCode()
+                );
+
+                String jwt = tokenProvider.generateToken(
+                        new UsernamePasswordAuthenticationToken(
+                                principal,
+                                null,
+                                principal.getAuthorities()
+                        )
+                );
+            } else {
+                return new LoginResponse()
+                        .setLoginStatus("failed")
+                        .setRemainingAttempts(String.valueOf(otpVerifyResponse.remainingAttempts()))
+                        .setRemainingAttempts(String.valueOf(otpVerifyResponse.remainingAttempts()));
             }
         }
 

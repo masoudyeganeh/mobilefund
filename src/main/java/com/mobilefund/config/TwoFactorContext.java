@@ -3,6 +3,7 @@ package com.mobilefund.config;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serializable;
+import java.time.Duration;
 import java.time.Instant;
 
 public class TwoFactorContext implements Serializable {
@@ -10,21 +11,31 @@ public class TwoFactorContext implements Serializable {
     private String otp;
     private String phoneNumber;
     @JsonFormat(shape = JsonFormat.Shape.STRING)
-    private Instant expiryTime = Instant.now().plusSeconds(600); // 10 minutes expiry
+    private Instant expiryTime = Instant.now().plusSeconds(180); // 3 minutes expiry
+    private int maxAttempts;
+    private int remainingAttempts;
 
     // Constructors
     public TwoFactorContext() {}
 
-    public TwoFactorContext(String nationalCode, String password, String phoneNumber) {
+    public TwoFactorContext(String nationalCode, String phoneNumber, Instant expiryTime, int maxAttempts) {
         this.nationalCode = nationalCode;
-        this.phoneNumber = phoneNumber;
         this.otp = generateRandomOtp();
+        this.phoneNumber = phoneNumber;
+        this.expiryTime = expiryTime;
+        this.maxAttempts = maxAttempts;
+        this.remainingAttempts = maxAttempts;
     }
 
     // Business logic methods
     @JsonIgnore
     public boolean isExpired() {
         return Instant.now().isAfter(expiryTime);
+    }
+
+    @JsonIgnore
+    public Duration getRemainingTime() {
+        return Duration.between(Instant.now(), expiryTime);
     }
 
     private String generateRandomOtp() {
@@ -40,4 +51,22 @@ public class TwoFactorContext implements Serializable {
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     public Instant getExpiryTime() { return expiryTime; }
     public void setExpiryTime(Instant expiryTime) { this.expiryTime = expiryTime; }
+
+    public int getMaxAttempts() {
+        return maxAttempts;
+    }
+
+    public TwoFactorContext setMaxAttempts(int maxAttempts) {
+        this.maxAttempts = maxAttempts;
+        return this;
+    }
+
+    public int getRemainingAttempts() {
+        return remainingAttempts;
+    }
+
+    public TwoFactorContext setRemainingAttempts(int remainingAttempts) {
+        this.remainingAttempts = remainingAttempts;
+        return this;
+    }
 }

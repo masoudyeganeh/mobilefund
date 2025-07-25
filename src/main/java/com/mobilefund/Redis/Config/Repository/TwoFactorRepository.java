@@ -17,12 +17,10 @@ public class TwoFactorRepository {
         this.redisTemplate = redisTemplate;
     }
 
-    public void save(TwoFactorContext twoFactorContext, Duration ttl){
-        twoFactorContext.setExpiryTime(Instant.now().plus(ttl));
+    public void save(TwoFactorContext twoFactorContext){
         redisTemplate.opsForValue().set(
                 KEY_PREFIX + twoFactorContext.getPhoneNumber(),
-                twoFactorContext,
-                ttl
+                twoFactorContext
         );
     }
 
