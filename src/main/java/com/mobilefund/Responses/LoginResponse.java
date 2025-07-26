@@ -2,10 +2,11 @@ package com.mobilefund.Responses;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.mobilefund.Model.LoginStatus;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LoginResponse {
-    private String loginStatus;
+    private LoginStatus loginStatus;
     private String remainingTime;
     private String remainingAttempts;
     private String nationalCode;
@@ -13,7 +14,7 @@ public class LoginResponse {
     @JsonIgnore
     private String jwt;
 
-    public LoginResponse(String loginStatus, String remainingTime, String remainingAttempts, String nationalCode, String mobileNumber, String jwt) {
+    public LoginResponse(LoginStatus loginStatus, String remainingTime, String remainingAttempts, String nationalCode, String mobileNumber, String jwt) {
         this.loginStatus = loginStatus;
         this.remainingTime = remainingTime;
         this.remainingAttempts = remainingAttempts;
@@ -24,11 +25,11 @@ public class LoginResponse {
 
     public LoginResponse() {}
 
-    public String getLoginStatus() {
+    public LoginStatus getLoginStatus() {
         return loginStatus;
     }
 
-    public LoginResponse setLoginStatus(String loginStatus) {
+    public LoginResponse setLoginStatus(LoginStatus loginStatus) {
         this.loginStatus = loginStatus;
         return this;
     }

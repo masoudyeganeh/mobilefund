@@ -9,13 +9,10 @@ import com.mobilefund.Repository.OtpCacheRepository;
 import com.mobilefund.Repository.RoleRepository;
 import com.mobilefund.Repository.UserRepository;
 import com.mobilefund.Responses.ApiResponse;
-import com.mobilefund.Responses.JwtAuthenticationResponse;
 import com.mobilefund.Responses.LoginResponse;
-import com.mobilefund.Responses.OtpVerifyResponse;
 import com.mobilefund.config.CustomUserDetailsService;
 import com.mobilefund.config.JwtTokenProvider;
 import com.mobilefund.config.OtpContext;
-import com.mobilefund.config.TwoFactorContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -25,7 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
@@ -42,11 +38,20 @@ public class AuthService {
     private final TwoFactorRepository twoFactorRepository;
     private final RedisAuthRepository redisAuthRepository;
 
-    @Value("${sms.validity.minutes}")
-    private int otpValidityMinutes;
+    @Value("${sms.validity.seconds}")
+    private int otpValiditySeconds;
 
     @Value("${sms.max.attempts}")
     private int maxAttempts;
+
+    @Value("${app.jwtExpirationInMs}")
+    private int jwtExpirationInMs;
+
+    @Value("${sms.max.OtpRequests}")
+    private int maxOtpRequests;
+
+    @Value("${sms.rateLimit.Window.Minutes}")
+    private int rateLimitWindowMinutes;
 
     public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, CustomUserDetailsService customUserDetailsService, TwoFactorRepository twoFactorRepository, JwtTokenProvider tokenProvider, SmsService smsService, ExternalValidationService validationService, OtpCacheRepository otpCacheRepository, RedisAuthRepository redisAuthRepository) {
         this.authenticationManager = authenticationManager;
@@ -86,87 +91,110 @@ public class AuthService {
         User user = findUserByUsername(loginRequest.getUsername());
 
         if (!user.isTwoFactorAuth()) {
-            if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-                throw new BadCredentialsException("Invalid credentials");
-            }
-
-            UserPrincipal principal = (UserPrincipal) customUserDetailsService.loadUserByUsername(
-                    user.getNationalCode()
-            );
-
-            String jwt = tokenProvider.generateToken(
-                    new UsernamePasswordAuthenticationToken(
-                            principal,
-                            null,
-                            principal.getAuthorities()
-                    )
-            );
-
-            redisAuthRepository.saveJwtToken(user.getNationalCode(), jwt, 3);
-
-            return new LoginResponse()
-                    .setLoginStatus("success")
-                    .setNationalCode(user.getNationalCode())
-                    .setMobileNumber(user.getPhoneNumber())
-                    .setJwt(jwt);
-
+            return handleSFAuthentication(user, loginRequest);
         } else {
-            Optional<OtpContext> context = redisAuthRepository.getOtpContext("login", user.getPhoneNumber());
-            if (context.isEmpty()) {
-                OtpContext otpContext = new OtpContext()
-                        .setOtp(generateOtp())
-                        .setAttempts(maxAttempts)
-                        .setIssuedAt(LocalDateTime.now());
-                redisAuthRepository.saveOtpContext("login", user.getPhoneNumber(), otpContext, otpValidityMinutes);
-                smsService.sendSms(user.getPhoneNumber(), otpContext.getOtp());
+            return handle2FAuthentication(user, loginRequest);
+        }
+    }
 
-                return new LoginResponse()
-                        .setLoginStatus("otp required")
-                        .setRemainingTime(String.valueOf(otpValidityMinutes))
-                        .setRemainingAttempts(String.valueOf(maxAttempts));
-            } else {
-                if (context.get().getAttempts() <= 0) {
-                    redisAuthRepository.deleteOtpContext("login", user.getPhoneNumber());
-                    throw new BadCredentialsException("Maximum OTP attempts exceeded.");
-                }
 
-                if (context.get().getOtp().equals(loginRequest.getOtp())) {
-                    redisAuthRepository.deleteOtpContext("login", user.getPhoneNumber());
+    private LoginResponse handleSFAuthentication(User user, LoginRequest loginRequest) {
+        validatePassword(user, loginRequest.getPassword());
 
-                    if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-                        throw new BadCredentialsException("Invalid credentials");
-                    }
+        UserPrincipal principal = loadPrincipal(user);
+        String jwt = generateAndStoreJwt(user, principal);
 
-                    UserPrincipal principal = (UserPrincipal) customUserDetailsService.loadUserByUsername(
-                            user.getNationalCode()
-                    );
+        return buildSuccessResponse(user, jwt);
+    }
 
-                    String jwt = tokenProvider.generateToken(
-                            new UsernamePasswordAuthenticationToken(
-                                    principal,
-                                    null,
-                                    principal.getAuthorities()
-                            )
-                    );
+    private LoginResponse handle2FAuthentication(User user, LoginRequest loginRequest) {
+        Optional<OtpContext> contextOpt = redisAuthRepository.getOtpContext("login", user.getPhoneNumber());
 
-                    redisAuthRepository.saveJwtToken(user.getNationalCode(), jwt, 3);
-
-                    return new LoginResponse()
-                            .setLoginStatus("success")
-                            .setNationalCode(user.getNationalCode())
-                            .setMobileNumber(user.getPhoneNumber())
-                            .setJwt(jwt);
-                } else {
-                    context.get().setAttempts(context.get().getAttempts() - 1);
-                    redisAuthRepository.saveOtpContext("login", user.getPhoneNumber(), context.get(), otpValidityMinutes);
-                    return new LoginResponse()
-                            .setLoginStatus("false")
-                            .setRemainingTime(String.valueOf(otpValidityMinutes))
-                            .setRemainingAttempts(Integer.toString(context.get().getAttempts()));
-                }
+        if (contextOpt.isEmpty()) {
+            if (!redisAuthRepository.incrementOtpRequestCount(user.getPhoneNumber(), maxOtpRequests, rateLimitWindowMinutes)) {
+                throw new OtpCodeIsNotSent("Too many OTP requests. Please wait.");
             }
+            return sendOtp(user);
         }
 
+        OtpContext context = contextOpt.get();
+
+        long secondsElapsed = Duration.between(contextOpt.get().getIssuedAt(), LocalDateTime.now()).getSeconds();
+        long secondsRemaining = otpValiditySeconds - secondsElapsed;
+
+        if (secondsRemaining <= 0) {
+            throw new BadCredentialsException("Otp is expired");
+        }
+
+        if (context.getAttempts() <= 0) {
+            redisAuthRepository.deleteOtpContext("login", user.getPhoneNumber());
+            throw new BadCredentialsException("Maximum OTP attempts exceeded.");
+        }
+
+        if (!context.getOtp().equals(loginRequest.getOtp())) {
+            context.setAttempts(context.getAttempts() - 1);
+            redisAuthRepository.saveOtpContext("login", user.getPhoneNumber(), context, otpValiditySeconds);
+            return new LoginResponse()
+                    .setLoginStatus(LoginStatus.OTP_INVALID)
+                    .setRemainingTime(String.valueOf(secondsRemaining))
+                    .setRemainingAttempts(String.valueOf(context.getAttempts()));
+        }
+
+        // Valid OTP
+        redisAuthRepository.deleteOtpContext("login", user.getPhoneNumber());
+        validatePassword(user, loginRequest.getPassword());
+
+        UserPrincipal principal = loadPrincipal(user);
+        String jwt = generateAndStoreJwt(user, principal);
+
+        return buildSuccessResponse(user, jwt);
+    }
+
+    private void validatePassword(User user, String rawPassword) {
+        if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
+            throw new BadCredentialsException("Invalid credentials");
+        }
+    }
+
+    private UserPrincipal loadPrincipal(User user) {
+        return (UserPrincipal) customUserDetailsService.loadUserByUsername(user.getNationalCode());
+    }
+
+    private String generateAndStoreJwt(User user, UserPrincipal principal) {
+        String jwt = tokenProvider.generateToken(
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        principal.getAuthorities()
+                )
+        );
+        redisAuthRepository.saveJwtToken(user.getNationalCode(), jwt, jwtExpirationInMs);
+        return jwt;
+    }
+
+    private LoginResponse buildSuccessResponse(User user, String jwt) {
+        return new LoginResponse()
+                .setLoginStatus(LoginStatus.SUCCESS)
+                .setNationalCode(user.getNationalCode())
+                .setMobileNumber(user.getPhoneNumber())
+                .setJwt(jwt);
+    }
+
+    private LoginResponse sendOtp(User user) {
+        String otp = generateOtp();
+
+        OtpContext context = new OtpContext()
+                .setOtp(otp)
+                .setAttempts(maxAttempts)
+                .setIssuedAt(LocalDateTime.now());
+
+        redisAuthRepository.saveOtpContext("login", user.getPhoneNumber(), context, otpValiditySeconds);
+        smsService.sendSms(user.getPhoneNumber(), otp);
+
+        return new LoginResponse()
+                .setLoginStatus(LoginStatus.OTP_REQUIRED)
+                .setRemainingTime(String.valueOf(otpValiditySeconds))
+                .setRemainingAttempts(String.valueOf(maxAttempts));
     }
 
     public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {

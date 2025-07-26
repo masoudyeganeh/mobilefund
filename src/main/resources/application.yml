@@ -3,13 +3,13 @@ server:
 
 spring:
   datasource:
-#    url: jdbc:oracle:thin:@//localhost:1521/xepdb1
-    url: jdbc:oracle:thin:@//avdf01.rh:2019/rayannav21c.rh
+    url: jdbc:oracle:thin:@//localhost:1521/xepdb1
+#    url: jdbc:oracle:thin:@//avdf01.rh:2019/rayannav21c.rh
     driverClassName: oracle.jdbc.OracleDriver
-    username: N21AATF01
-    password: n
-#    username: masoud
-#    password: 1234
+#    username: N21AATF01
+#    password: n
+    username: masoud
+    password: 1234
 
   redis:
     host: localhost
@@ -41,6 +41,10 @@ sms:
     url: http://sms-gateway/api/send
     apiKey: your-sms-api-key
   validity:
-    minutes: 3
+    seconds: 30
   max:
     attempts: 3
+    OtpRequests: 2
+  rateLimit:
+    Window:
+      Minutes: 1

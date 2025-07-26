@@ -24,8 +24,8 @@ public class SmsService {
     @Value("${sms.provider.apiKey}")
     private String apiKey;
 
-    @Value("${sms.validity.minutes}")
-    private int otpValidityMinutes;
+    @Value("${sms.validity.seconds}")
+    private int otpValiditySeconds;
 
     @Value("${sms.max.attempts}")
     private int maxAttempts;

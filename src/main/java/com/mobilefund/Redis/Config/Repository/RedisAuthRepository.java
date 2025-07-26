@@ -23,7 +23,7 @@ public class RedisAuthRepository {
 
     // JWT Token Handling
     public void saveJwtToken(String username, String jwt, long minutes) {
-        jwtRedisTemplate.opsForValue().set("jwt:" + username, jwt, minutes, TimeUnit.MINUTES);
+        jwtRedisTemplate.opsForValue().set("jwt:" + username, jwt, minutes, TimeUnit.MILLISECONDS);
     }
 
     public String getJwtToken(String username) {
@@ -36,7 +36,7 @@ public class RedisAuthRepository {
 
     // OTP Context Handling
     public void saveOtpContext(String context, String phoneNumber, OtpContext otpContext, long ttlMinutes) {
-        otpTemplate.opsForValue().set("otp:" + context + ":" + phoneNumber, otpContext, ttlMinutes, TimeUnit.MINUTES);
+        otpTemplate.opsForValue().set("otp:" + context + ":" + phoneNumber, otpContext, ttlMinutes, TimeUnit.SECONDS);
     }
 
     public Optional<OtpContext> getOtpContext(String context, String phoneNumber) {
