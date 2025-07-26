@@ -17,7 +17,7 @@ public class TwoFactorRepository {
         this.redisTemplate = redisTemplate;
     }
 
-    public void save(TwoFactorContext twoFactorContext){
+    public void save(TwoFactorContext twoFactorContext, String type) {
         redisTemplate.opsForValue().set(
                 KEY_PREFIX + twoFactorContext.getPhoneNumber(),
                 twoFactorContext

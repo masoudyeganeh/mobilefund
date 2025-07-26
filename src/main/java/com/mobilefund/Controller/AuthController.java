@@ -32,7 +32,7 @@ public class AuthController {
     public ResponseEntity<LoginResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest, HttpServletResponse response) {
         try {
             LoginResponse loginResponse = authService.authenticateUser(loginRequest);
-            if (!Objects.equals(loginResponse.getJwt(), "otp required")) {
+            if (loginResponse.getJwt() != null) {
                 ResponseCookie cookie = ResponseCookie.from("jwt", loginResponse.getJwt())
                         .httpOnly(true)
                         .secure(true)

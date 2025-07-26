@@ -40,3 +40,7 @@ sms:
   provider:
     url: http://sms-gateway/api/send
     apiKey: your-sms-api-key
+  validity:
+    minutes: 3
+  max:
+    attempts: 3
