@@ -36,10 +36,6 @@ public class AuthController {
                 ResponseCookie cookie = ResponseCookie.from("jwt", loginResponse.getJwt())
                         .httpOnly(true)
                         .secure(true)
-                        .path("/")
-                        .maxAge(Duration.ofDays(30))
-                        .sameSite("Strict")
-                        .domain("yourdomain.com")
                         .build();
                 response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
                 return ResponseEntity.ok(
@@ -52,15 +48,15 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
-        return authService.registerUser(registerRequest);
+    @PostMapping("/register/sendOtp")
+    public ResponseEntity<LoginResponse> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
+        return ResponseEntity.ok(authService.registerUser(registerRequest));
     }
 
-    @PostMapping("/register/verify")
-    public ResponseEntity<?> verifyRegistrationOtp(@Valid @RequestBody OtpVerificationRequest otpRequest) {
-        return authService.verifyRegistrationOtp(otpRequest);
-    }
+//    @PostMapping("/register/verify")
+//    public ResponseEntity<?> verifyRegistrationOtp(@Valid @RequestBody OtpVerificationRequest otpRequest) {
+//        return authService.verifyRegistrationOtp(otpRequest);
+//    }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest) {

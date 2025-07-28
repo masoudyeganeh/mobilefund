@@ -38,21 +38,26 @@ public class JwtTokenFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws IOException, ServletException {
 
-        // 1. Extract from cookie instead of header
-        String jwt = Arrays.stream(request.getCookies())
-                .filter(c -> "jwt".equals(c.getName()))
-                .findFirst()
-                .map(Cookie::getValue)
-                .orElse(null);
+        String jwt = null;
 
-        // 2. Validate token
-        if (jwt != null && tokenProvider.validateToken(jwt)) {
+        // Null-safe cookie reading
+        if (request.getCookies() != null) {
+            jwt = Arrays.stream(request.getCookies())
+                    .filter(c -> "jwt".equals(c.getName()))
+                    .findFirst()
+                    .map(Cookie::getValue)
+                    .orElse(null);
+        }
+
+        // Only validate non-empty JWT
+        if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
             Authentication auth = tokenProvider.getAuthentication(jwt);
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
 
         chain.doFilter(request, response);
     }
+
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {

@@ -197,95 +197,72 @@ public class AuthService {
                 .setRemainingAttempts(String.valueOf(maxAttempts));
     }
 
-    public ResponseEntity<ApiResponse> registerUser(RegisterRequest registerRequest) {
-        if (userRepository.existsByNationalCode(registerRequest.getNationalCode()) || userRepository.existsByPhoneNumber(registerRequest.getPhoneNumber())) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(new ApiResponse(false, "Username is already taken!"));
+    public LoginResponse registerUser(RegisterRequest registerRequest) {
+        if (userRepository.existsByNationalCode(registerRequest.getNationalCode())) {
+            throw new OtpCodeIsNotSent("national code is already exists");
         }
 
         if (userRepository.existsByPhoneNumber(registerRequest.getPhoneNumber())) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(new ApiResponse(false, "Phone number is already in use!"));
+            throw new OtpCodeIsNotSent("phone number is already exists");
         }
 
-        if (userRepository.existsByNationalCode(registerRequest.getNationalCode())) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(new ApiResponse(false, "National code is already registered!"));
-        }
-
+        // Check shahkar service
         boolean isValid = true;
 
         if (!isValid) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(new ApiResponse(false, "Validation failed with external service"));
+            throw new OtpCodeIsNotSent("phone number doesn't belong to nationalCode");
         }
 
         // Generate OTP
-        String otp = generateOtp();
-        LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(5);
+        User user = User.builder()
+                .nationalCode(registerRequest.getNationalCode())
+                .phoneNumber(registerRequest.getPhoneNumber())
+                .build();
 
-        // Save registration data temporarily with OTP
-        otpCacheRepository.save(new OtpCache(
-                registerRequest.getPhoneNumber(),
-                otp,
-                expiryTime,
-                "REGISTER",
-                passwordEncoder.encode(registerRequest.getPassword()),
-                registerRequest.getNationalCode(),
-                registerRequest.getUsername()
-        ));
-
-        // Send OTP via SMS
-        smsService.sendSms(registerRequest.getPhoneNumber(), "Your verification code is: " + otp);
-
-        return ResponseEntity.ok(new ApiResponse(true, "OTP sent to your phone for registration"));
+        return sendOtp(user);
     }
 
-    public ResponseEntity<?> verifyRegistrationOtp(OtpVerificationRequest otpRequest) {
-        Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
-
-        if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("REGISTER")) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP request"));
-        }
-
-        if (LocalDateTime.now().isAfter(otpCache.get().getExpiryTime())) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "OTP expired"));
-        }
-
-        if (!otpCache.get().getOtp().equals(otpRequest.getOtp())) {
-            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP"));
-        }
-
-        RegisterRequest registerRequest = new RegisterRequest();
-        registerRequest.setNationalCode(otpCache.get().getNationalCode());
-        registerRequest.setUsername(otpCache.get().getUsername());
-        registerRequest.setPassword(otpCache.get().getTempData()); // This is already encoded
-        registerRequest.setPhoneNumber(otpRequest.getPhoneNumber());
-
-        // Create user
-        User user = new User(
-                registerRequest.getNationalCode(),
-                registerRequest.getPassword(), // Already encoded password
-                registerRequest.getPhoneNumber()
-        );
-
-        Set<Role> roles = new HashSet<>();
-        Role userRole = roleRepository.findByName(ERole.ROLE_USER)
-                .orElseThrow();
-        roles.add(userRole);
-
-        user.setRoles(roles);
-        userRepository.save(user);
-
-        // Clean up OTP cache
-        otpCacheRepository.delete(otpCache.get());
-
-        return ResponseEntity.ok(new ApiResponse(true, "User registered successfully!"));
-    }
+//    public ResponseEntity<?> verifyRegistrationOtp(OtpVerificationRequest otpRequest) {
+//        Optional<OtpCache> otpCache = otpCacheRepository.findByPhoneNumber(otpRequest.getPhoneNumber());
+//
+//        if (otpCache.isEmpty() || !otpCache.get().getOperationType().equals("REGISTER")) {
+//            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP request"));
+//        }
+//
+//        if (LocalDateTime.now().isAfter(otpCache.get().getExpiryTime())) {
+//            return ResponseEntity.badRequest().body(new ApiResponse(false, "OTP expired"));
+//        }
+//
+//        if (!otpCache.get().getOtp().equals(otpRequest.getOtp())) {
+//            return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid OTP"));
+//        }
+//
+//        RegisterRequest registerRequest = new RegisterRequest();
+//        registerRequest.setNationalCode(otpCache.get().getNationalCode());
+//        registerRequest.setUsername(otpCache.get().getUsername());
+//        registerRequest.setPassword(otpCache.get().getTempData()); // This is already encoded
+//        registerRequest.setPhoneNumber(otpRequest.getPhoneNumber());
+//
+//        // Create user
+//        User user = new User(
+//                registerRequest.getNationalCode(),
+//                registerRequest.getPassword(), // Already encoded password
+//                registerRequest.getPhoneNumber()
+//        );
+//
+//        Set<Role> roles = new HashSet<>();
+//        Role userRole = roleRepository.findByName(ERole.ROLE_USER)
+//                .orElseThrow();
+//        roles.add(userRole);
+//
+//        user.setRoles(roles);
+//        userRepository.save(user);
+//
+//        // Clean up OTP cache
+//        otpCacheRepository.delete(otpCache.get());
+//
+//        return ResponseEntity.ok(new ApiResponse(true, "User registered successfully!"));
+//    }
 
     public ResponseEntity<?> forgotPassword(ForgotPasswordRequest forgotPasswordRequest) {
         User user = userRepository.findByNationalCode(forgotPasswordRequest.getUsername())

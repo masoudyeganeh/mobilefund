@@ -1,49 +1,34 @@
 package com.mobilefund.Dto;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
 import javax.validation.constraints.NotBlank;
 
+@NoArgsConstructor
+@AllArgsConstructor
 public class RegisterRequest {
     @NotBlank
     private String nationalCode;
 
     @NotBlank
-    private String username;
+    private String phoneNumber;
 
     public String getNationalCode() {
         return nationalCode;
     }
 
-    public void setNationalCode(String nationalCode) {
+    public RegisterRequest setNationalCode(String nationalCode) {
         this.nationalCode = nationalCode;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
+        return this;
     }
 
     public String getPhoneNumber() {
         return phoneNumber;
     }
 
-    public void setPhoneNumber(String phoneNumber) {
+    public RegisterRequest setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+        return this;
     }
-
-    @NotBlank
-    private String password;
-
-    @NotBlank
-    private String phoneNumber;
 }
